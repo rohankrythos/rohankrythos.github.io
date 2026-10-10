@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delete your AuraStep account and data</title>
+<meta name="description" content="How to permanently delete your AuraStep account and all data stored for it: in the app or by email request.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://rohankrythos.github.io/aurastep-delete-account.html">
+<meta property="og:type" content="website"><meta property="og:title" content="Delete your AuraStep account and data"><meta property="og:url" content="https://rohankrythos.github.io/aurastep-delete-account.html"><meta property="og:image" content="https://rohankrythos.github.io/aurastep-logo.jpg">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<style>
+  :root {
+    --bg: #050505; --bg2: #111111; --accent: #27C39E; --gold: #C9A84C;
+    --text: #FFFFFF; --text2: #AFAFAF; --border: rgba(255,255,255,0.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text2);
+    font-family: 'Inter', -apple-system, Segoe UI, Roboto, sans-serif;
+    line-height: 1.7; margin: 0; padding: 0 20px 80px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  header { padding: 48px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+  .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .logo-row img { width: 44px; height: 44px; border-radius: 10px; }
+  .logo-row span { font-size: 22px; font-weight: 700; color: var(--text); }
+  h1 { color: var(--text); font-size: 28px; margin: 0 0 6px; }
+  .updated { font-size: 13px; color: var(--text2); }
+  h2 { color: var(--text); font-size: 19px; margin: 36px 0 12px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 20px; }
+  a { color: var(--accent); }
+  .back { display: inline-block; margin-top: 40px; color: var(--text2); text-decoration: none; font-size: 14px; border: 1px solid var(--border); padding: 10px 18px; border-radius: 8px; }
+  .back:hover { color: var(--text); border-color: var(--accent); }
+  .contact { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 24px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo-row">
+        <img src="aurastep-logo.jpg" alt="AuraStep logo">
+        <span>AuraStep</span>
+      </div>
+      <h1>Delete your account and data</h1>
+      <div class="updated">Last updated: 9 October 2026</div>
+    </header>
+
+    <p>This page explains how to permanently delete your <strong>AuraStep</strong> account and the data connected to it. AuraStep is developed by Rohan Krythos.</p>
+
+    <h2>Option 1 — Delete inside the app (fastest)</h2>
+    <ol>
+      <li>Open <strong>AuraStep</strong> and go to <strong>Settings</strong>.</li>
+      <li>In the <strong>Account</strong> section tap <strong>Delete account</strong> (if you never signed in, the button is called <strong>Delete my data</strong>).</li>
+      <li>Read the message and tap <strong>Continue</strong>.</li>
+      <li>Confirm it is you: enter your password (email accounts) or choose your Google account (Google accounts).</li>
+      <li>Your account and data are deleted and the App returns to the welcome screen.</li>
+    </ol>
+    <p>You need an internet connection so the cloud copy can be deleted. If you are offline, the App tells you that nothing was removed and you can try again.</p>
+
+    <h2>Option 2 — Request deletion by email</h2>
+    <p>If you can no longer open the App (for example it is uninstalled or you lost the phone), email us from the address linked to your account:</p>
+    <div class="contact">
+      <p style="margin:0;"><strong style="color:#fff;">appsupportwarrior@gmail.com</strong></p>
+      <p style="margin:8px 0 0;">Subject: <strong style="color:#fff;">AuraStep account deletion</strong><br>Include the email address (or "Sign in with Google" address) of your AuraStep account. We may ask you to confirm you own it. We delete the account within <strong style="color:#fff;">30 days</strong> and reply when it is done.</p>
+    </div>
+    <p>If you only ever used AuraStep without signing in, your backup is tied to a random anonymous ID that only your phone knows, so we cannot identify it from an email. Use Option 1 on the phone, or reinstall the App and use <strong>Delete my data</strong>.</p>
+
+    <h2>What is deleted</h2>
+    <ul>
+      <li>Your AuraStep (Firebase Authentication) account, including the email address and sign-in link.</li>
+      <li>Your cloud backup in Cloud Firestore: profile (name, height, weight, age, gender, goal) and all daily step records (steps, distance, calories, active minutes).</li>
+      <li>The same data stored on your phone (profile, history, tracking state and widget data).</li>
+    </ul>
+
+    <h2>What may remain, and for how long</h2>
+    <ul>
+      <li>Aggregated, non-identifying analytics and crash reports held by Google Firebase follow Google's own retention periods and are not linked to your deleted account.</li>
+      <li>Short-lived server backups and logs held by Google may take a limited time to be overwritten.</li>
+      <li>Information we must keep to meet a legal obligation (we currently keep none for AuraStep).</li>
+    </ul>
+
+    <h2>Good to know</h2>
+    <ul>
+      <li>Deletion is permanent and cannot be undone.</li>
+      <li><strong>Only want to leave the phone?</strong> Use <strong>Log out</strong> instead: your data stays safe in your account and you can restore it later.</li>
+      <li>Uninstalling the App alone removes the data on the phone but <strong>not</strong> the cloud backup, so please delete the account first.</li>
+    </ul>
+
+    <p>Read the full <a href="aurastep-privacy.html">AuraStep Privacy Policy</a>.</p>
+
+    <a class="back" href="index.html#showcase">&larr; Back to AuraStep on rohankrythos.github.io</a>
+  </div>
+</body>
+</html>
