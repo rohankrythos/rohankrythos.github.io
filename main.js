@@ -1,3 +1,11 @@
+// Low-power / reduced-motion devices get a lighter visual mode (see .lite rules in style.css)
+(function() {
+  var weak = (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ||
+             (navigator.deviceMemory && navigator.deviceMemory <= 4) ||
+             (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (weak) document.documentElement.classList.add('lite');
+})();
+
 (function() {
       const bar = document.getElementById('load-bar');
       const percent = document.getElementById('load-percent');
@@ -26,6 +34,8 @@
         finished = true;
         setTimeout(function() {
           screen.classList.add('hidden');
+          window.__loaderDone = true;
+          window.dispatchEvent(new Event('sf-loader-done'));
           setTimeout(function() { screen.style.display = 'none'; }, 1200);
         }, 300);
       }
@@ -75,7 +85,11 @@
         }
       }
 
-      function animate() {
+      var lastTs = 0;
+      function animate(ts) {
+        animationId = requestAnimationFrame(animate);
+        if (document.hidden || ts - lastTs < 33) return; // ~30fps is plenty for slow embers
+        lastTs = ts;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         particles.forEach(function(p) {
           p.x += p.speedX;
@@ -90,12 +104,11 @@
           ctx.fill();
         });
         ctx.globalAlpha = 1;
-        animationId = requestAnimationFrame(animate);
       }
 
       resize();
       createParticles();
-      animate();
+      if (!document.documentElement.classList.contains('lite')) animationId = requestAnimationFrame(animate);
       window.addEventListener('resize', function() { resize(); createParticles(); });
     })();
 
@@ -130,22 +143,29 @@
       });
     })();
 
-    // Hero entrance animations with delay after loading
-    setTimeout(function() {
-      document.getElementById('hero-left').classList.add('visible');
+    // Hero entrance: plays when the hero section is actually reached (the cinematic intro sits above it)
+(function() {
+  var entered = false;
+  function enterHero() {
+    if (entered) return;
+    entered = true;
+    document.getElementById('hero-left').classList.add('visible');
+    scrambleText('hero-name-1', 'ROHAN', 800);
+    setTimeout(function() { scrambleText('hero-name-2', 'KRYTHOS', 800); }, 400);
+    setTimeout(function() { document.getElementById('hero-right').classList.add('visible'); }, 600);
+  }
+  var hero = document.getElementById('hero');
+  if (hero && 'IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting) { enterHero(); io.disconnect(); }
+    }, { threshold: 0.2 });
+    io.observe(hero);
+  } else {
+    setTimeout(enterHero, 2800);
+  }
+})();
 
-      // Text scramble effect for hero name
-      scrambleText('hero-name-1', 'ROHAN', 800);
-      setTimeout(function() {
-        scrambleText('hero-name-2', 'KRYTHOS', 800);
-      }, 400);
-
-      setTimeout(function() {
-        document.getElementById('hero-right').classList.add('visible');
-      }, 600);
-    }, 2800);
-
-    // Text scramble function
+// Text scramble function
     function scrambleText(elementId, finalText, duration) {
       const el = document.getElementById(elementId);
       if (!el) return;
@@ -202,15 +222,19 @@
       });
     });
 
-    // Parallax effect for hero background
+    // Parallax effect for hero background (rAF-throttled)
     (function() {
       const heroBg = document.querySelector('.hero-bg');
-      if (heroBg) {
-        window.addEventListener('scroll', function() {
-          const scrolled = window.pageYOffset;
-          heroBg.style.transform = 'translateY(' + (scrolled * 0.3) + 'px)';
+      if (!heroBg) return;
+      let ticking = false;
+      window.addEventListener('scroll', function() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(function() {
+          heroBg.style.transform = 'translateY(' + (window.pageYOffset * 0.3) + 'px)';
+          ticking = false;
         });
-      }
+      }, { passive: true });
     })();
 
     // Magnetic hover effect for buttons
@@ -252,61 +276,67 @@
       }
     })();
 
-    // ========== HEADER ANIMATION: DESKTOP SCROLL-SCRUB / MOBILE AUTOPLAY ==========
+    // ========== HEADER ANIMATION: PLAY ONCE ON OPEN, THEN SCROLL-SCRUBBED (same on every device) ==========
     (function() {
       const section = document.getElementById('scroll-anim-section');
       const sticky = document.querySelector('.scroll-anim-sticky');
       const canvas = document.getElementById('scrollAnimCanvas');
       const loader = document.getElementById('scrollAnimLoader');
-      const hint = document.getElementById('scrollAnimHint');
       const progressFill = document.getElementById('scrollAnimProgress');
-      if (!section || !canvas) return;
+      const skipBtn = document.getElementById('scrollAnimSkip');
+      if (!section || !canvas || !sticky) return;
 
       const ctx = canvas.getContext('2d');
+      const root = document.documentElement;
       const TOTAL_FRAMES = 240;
-      const isMobile = window.matchMedia('(max-width: 768px)').matches;
-      section.classList.toggle('mobile-mode', isMobile);
-      if (isMobile && hint) hint.style.display = 'none';
+      const INTRO_MS = 5200;        // length of the opening play-through
+      const SCRUB_REVERSE = true;   // true: top of page = finished title card, scrolling down rewinds it.
+                                    // false: scrolling down plays 1 -> 240 (the card is held until the first scroll).
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const clamp = function(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
 
       // Frames 1-99 live in header-frame-A, 100-198 in header-frame-B, 199-240 in header-frame-C
       function framePath(n) {
         const padded = String(n).padStart(3, '0');
-        let folder;
-        if (n <= 99) folder = 'header-frame-A';
-        else if (n <= 198) folder = 'header-frame-B';
-        else folder = 'header-frame-C';
+        const folder = n <= 99 ? 'header-frame-A' : (n <= 198 ? 'header-frame-B' : 'header-frame-C');
         return folder + '/ezgif-frame-' + padded + '.jpg';
       }
 
-      const images = new Array(TOTAL_FRAMES + 1); // 1-indexed
+      const images = new Array(TOTAL_FRAMES + 1);
       const loadedFlags = new Array(TOTAL_FRAMES + 1).fill(false);
-      let currentFrame = 1;
+      let loadedCount = 0;
+      let firstLoaded = false;
 
-      function markLoaded(n) {
-        loadedFlags[n] = true;
-        if (n === 1) {
-          loader.classList.add('hidden');
-          drawFrame(1, true);
-          if (isMobile) startMobileAutoplay();
-        }
+      function markLoaded(n, ok) {
+        if (loadedFlags[n]) return;
+        loadedFlags[n] = ok;                 // a failed frame never blocks the sequence
+        loadedCount++;
+        if (n === 1 && ok) { firstLoaded = true; drawFrame(1, true); }
+        tryStart();
       }
-
-      // Kick off loading of all frames (browser queues/parallelizes automatically)
       for (let i = 1; i <= TOTAL_FRAMES; i++) {
         const img = new Image();
         img.decoding = 'async';
-        img.onload = function() { markLoaded(i); };
-        img.onerror = function() { markLoaded(i); }; // don't block sequence on a bad frame
+        img.onload = function() { markLoaded(i, true); };
+        img.onerror = function() { markLoaded(i, false); };
         img.src = framePath(i);
         images[i] = img;
       }
 
+      // ---------- canvas sizing + drawing ----------
+      let cw = 0, ch = 0;
+      const bg = document.createElement('canvas');   // tiny canvas = cheap blurred backdrop for tall screens
+      bg.width = 48; bg.height = 27;
+      const bctx = bg.getContext('2d');
+
       function resizeCanvas() {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = sticky.getBoundingClientRect();
-        canvas.width = Math.round(rect.width * dpr);
-        canvas.height = Math.round(rect.height * dpr);
-        drawFrame(currentFrame, true);
+        let dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const maxPixels = 2300000;                    // keep phones/low-end GPUs comfortable
+        dpr = Math.min(dpr, Math.sqrt(maxPixels / Math.max(1, rect.width * rect.height)));
+        cw = canvas.width = Math.max(2, Math.round(rect.width * dpr));
+        ch = canvas.height = Math.max(2, Math.round(rect.height * dpr));
+        drawFrame(shown, true);
       }
 
       function nearestAvailableFrame(target) {
@@ -318,115 +348,138 @@
         return 1;
       }
 
-      // Desktop: hard "cover" crop (fills the wide sticky viewport, minor left/right crop only)
-      function drawCover(img, cw, ch) {
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        const canvasRatio = cw / ch, imgRatio = iw / ih;
-        let sx, sy, sw, sh;
-        if (imgRatio > canvasRatio) {
-          sh = ih; sw = ih * canvasRatio; sx = (iw - sw) / 2; sy = 0;
-        } else {
-          sw = iw; sh = iw / canvasRatio; sx = 0; sy = (ih - sh) / 2;
-        }
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
-      }
-
-      // Mobile: blurred cover backdrop + sharp "contain" foreground so nothing important gets cropped
-      // on tall portrait screens (a 16:9 frame would otherwise lose most of its width to a hard crop).
-      function drawContainWithBackdrop(img, cw, ch) {
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        try {
-          ctx.save();
-          ctx.filter = 'blur(24px) brightness(0.55)';
-          const bScale = Math.max(cw / iw, ch / ih) * 1.15;
-          const bw = iw * bScale, bh = ih * bScale;
-          ctx.drawImage(img, (cw - bw) / 2, (ch - bh) / 2, bw, bh);
-          ctx.restore();
-        } catch (e) { /* filter unsupported on very old browsers - skip backdrop */ }
-
-        const fScale = Math.min(cw / iw, ch / ih);
-        const fw = iw * fScale, fh = ih * fScale;
-        ctx.drawImage(img, (cw - fw) / 2, (ch - fh) / 2, fw, fh);
-      }
-
+      let shown = 1;        // frame number currently on the canvas
       function drawFrame(requested, force) {
-        const frameToShow = nearestAvailableFrame(requested);
-        if (!force && frameToShow === currentFrame) return;
-        currentFrame = frameToShow;
-        const img = images[frameToShow];
-        if (!img || !img.complete || !img.naturalWidth) return;
-
-        const cw = canvas.width, ch = canvas.height;
+        const n = nearestAvailableFrame(clamp(Math.round(requested), 1, TOTAL_FRAMES));
+        if (!force && n === shown) return;
+        const img = images[n];
+        if (!img || !img.complete || !img.naturalWidth || !cw) return;
+        shown = n;
+        const iw = img.naturalWidth, ih = img.naturalHeight;
         ctx.clearRect(0, 0, cw, ch);
-        if (isMobile) {
-          drawContainWithBackdrop(img, cw, ch);
+        if (cw / ch >= 1.25) {
+          // wide screen: fill the viewport (cover crop)
+          const canvasRatio = cw / ch, imgRatio = iw / ih;
+          let sx, sy, sw, sh;
+          if (imgRatio > canvasRatio) { sh = ih; sw = ih * canvasRatio; sx = (iw - sw) / 2; sy = 0; }
+          else { sw = iw; sh = iw / canvasRatio; sx = 0; sy = (ih - sh) / 2; }
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
         } else {
-          drawCover(img, cw, ch);
+          // tall screen (phones, "desktop site" on phones): whole frame visible over a soft backdrop
+          bctx.drawImage(img, 0, 0, 48, 27);
+          const bScale = Math.max(cw / 48, ch / 27);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(bg, (cw - 48 * bScale) / 2, (ch - 27 * bScale) / 2, 48 * bScale, 27 * bScale);
+          ctx.fillStyle = 'rgba(5,5,5,0.5)';
+          ctx.fillRect(0, 0, cw, ch);
+          const fScale = Math.min(cw / iw, ch / ih);
+          ctx.drawImage(img, (cw - iw * fScale) / 2, (ch - ih * fScale) / 2, iw * fScale, ih * fScale);
         }
       }
 
-      // ---------- DESKTOP: scroll-scrubbing ----------
-      function updateFromScroll() {
+      // ---------- phase 1: opening play-through ----------
+      let phase = 'loading';     // loading -> intro -> scrub
+      let loaderDone = !!window.__loaderDone;
+      let startedAt = 0;
+      let cur = 1;               // float frame position used by the scrub easing
+
+      function lockScroll() {
+        root.classList.add('intro-lock');
+        window.addEventListener('wheel', blockScroll, { passive: false });
+        window.addEventListener('touchmove', blockScroll, { passive: false });
+        window.addEventListener('keydown', blockKeys, true);
+      }
+      function unlockScroll() {
+        root.classList.remove('intro-lock');
+        window.removeEventListener('wheel', blockScroll);
+        window.removeEventListener('touchmove', blockScroll);
+        window.removeEventListener('keydown', blockKeys, true);
+      }
+      function blockScroll(e) { if (e.cancelable) e.preventDefault(); }
+      function blockKeys(e) {
+        if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' ', 'Spacebar'].indexOf(e.key) !== -1) e.preventDefault();
+      }
+
+      function startIntro() {
+        if (phase !== 'loading') return;
+        if (!firstLoaded) { finishIntro(true); return; }       // frames failed completely: just show the page
+        phase = 'intro';
+        loader.classList.add('hidden');
+        section.classList.add('intro-playing');
+        lockScroll();
+        startedAt = performance.now();
+        requestAnimationFrame(introStep);
+      }
+      function introStep(now) {
+        if (phase !== 'intro') return;
+        const t = clamp((now - startedAt) / INTRO_MS, 0, 1);
+        drawFrame(1 + t * (TOTAL_FRAMES - 1));
+        if (t < 1) requestAnimationFrame(introStep); else finishIntro(false);
+      }
+      function finishIntro(jump) {
+        if (phase === 'scrub') return;
+        phase = 'scrub';
+        loader.classList.add('hidden');
+        if (jump) drawFrame(TOTAL_FRAMES, true);
+        cur = TOTAL_FRAMES;
+        section.classList.remove('intro-playing');
+        section.classList.add('intro-done');
+        unlockScroll();
+        updateFromScroll();
+      }
+
+      // Start once the loading screen is gone and (nearly) all frames are in; hard timeouts so the page never hangs.
+      function tryStart() {
+        if (phase !== 'loading' || !loaderDone) return;
+        if (loadedCount >= TOTAL_FRAMES * 0.92) beginPlayback();
+      }
+      function beginPlayback() {
+        if (phase !== 'loading') return;
+        if (reduceMotion || location.hash) { finishIntro(true); return; }   // no autoplay for reduced-motion / deep links
+        startIntro();
+      }
+      window.addEventListener('sf-loader-done', function() { loaderDone = true; tryStart(); setTimeout(beginPlayback, 7000); });
+      if (loaderDone) { tryStart(); setTimeout(beginPlayback, 7000); }
+      setTimeout(function() { loaderDone = true; beginPlayback(); }, 14000);   // absolute safety net
+
+      if (skipBtn) skipBtn.addEventListener('click', function() { if (phase === 'intro') finishIntro(true); });
+
+      // ---------- phase 2: scroll-scrubbing (identical on mobile, tablet, desktop) ----------
+      let progress = 0;
+      let target = TOTAL_FRAMES;
+      let easing = false;
+      function computeTarget() {
         const rect = section.getBoundingClientRect();
-        const scrollable = section.offsetHeight - window.innerHeight;
-        let progress = scrollable > 0 ? (-rect.top) / scrollable : 0;
-        progress = Math.max(0, Math.min(1, progress));
-
-        const inView = rect.top < window.innerHeight && rect.bottom > 0;
-        section.classList.toggle('in-view', inView);
+        const scrollable = section.offsetHeight - sticky.clientHeight;
+        progress = scrollable > 0 ? clamp(-rect.top / scrollable, 0, 1) : 0;
+        section.classList.toggle('in-view', rect.top < window.innerHeight && rect.bottom > 0);
         section.classList.toggle('at-end', progress > 0.02);
-
-        const frameIndex = Math.max(1, Math.min(TOTAL_FRAMES, Math.round(progress * (TOTAL_FRAMES - 1)) + 1));
-        drawFrame(frameIndex);
         if (progressFill) progressFill.style.width = (progress * 100) + '%';
+        if (SCRUB_REVERSE) return TOTAL_FRAMES - progress * (TOTAL_FRAMES - 1);
+        return progress < 0.002 ? TOTAL_FRAMES : 1 + progress * (TOTAL_FRAMES - 1);
       }
-
-      let ticking = false;
-      function onScroll() {
-        if (!ticking) {
-          window.requestAnimationFrame(function() { updateFromScroll(); ticking = false; });
-          ticking = true;
-        }
+      // Glide toward the scroll position: after the opening play-through the first scroll is a fast
+      // rewind instead of a hard jump, and normal scrolling stays smooth.
+      function ease() {
+        const diff = target - cur;
+        if (Math.abs(diff) < 0.6) { cur = target; drawFrame(cur); easing = false; return; }
+        cur += clamp(diff * 0.25, -16, 16);
+        drawFrame(cur);
+        requestAnimationFrame(ease);
       }
-
-      // ---------- MOBILE: one-time autoplay when the section enters view ----------
-      let autoplayStarted = false;
-      function startMobileAutoplay() {
-        if (autoplayStarted) return;
-        autoplayStarted = true;
-        const DURATION = 4200; // ms for a full play-through
-        const t0 = performance.now();
-        function step(now) {
-          const t = Math.min(1, (now - t0) / DURATION);
-          const frameIndex = Math.max(1, Math.min(TOTAL_FRAMES, Math.round(t * (TOTAL_FRAMES - 1)) + 1));
-          drawFrame(frameIndex);
-          if (t < 1) requestAnimationFrame(step);
-        }
-        requestAnimationFrame(step);
+      function updateFromScroll() {
+        if (phase !== 'scrub') return;
+        target = computeTarget();
+        if (!easing) { easing = true; requestAnimationFrame(ease); }
       }
+      window.addEventListener('scroll', updateFromScroll, { passive: true });
+      window.addEventListener('resize', function() { resizeCanvas(); updateFromScroll(); });
 
-      if (isMobile) {
-        const io = new IntersectionObserver(function(entries) {
-          entries.forEach(function(entry) {
-            if (entry.isIntersecting && images[1] && images[1].complete) {
-              startMobileAutoplay();
-              io.disconnect();
-            }
-          });
-        }, { threshold: 0.25 });
-        io.observe(section);
-      } else {
-        window.addEventListener('scroll', onScroll, { passive: true });
-      }
-
-      window.addEventListener('resize', function() {
-        resizeCanvas();
-        if (!isMobile) updateFromScroll();
-      });
-
-      // Initial setup
+      // Always start a visit at the top so the opening play-through is the first thing seen
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+      if (!location.hash) window.scrollTo(0, 0);
       resizeCanvas();
-      if (!isMobile) updateFromScroll();
     })();
 
     // Profile 3D tilt on mouse move
@@ -439,7 +492,7 @@
         const rect = profileBox.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width - 0.5;
         const y = (e.clientY - rect.top) / rect.height - 0.5;
-        profileImg.style.transform = 'scale(1.08) rotateY(' + (x * 15) + 'deg) rotateX(' + (-y * 15) + 'deg)';
+        profileImg.style.transform = 'perspective(800px) scale(1.08) rotateY(' + (x * 15) + 'deg) rotateX(' + (-y * 15) + 'deg)';
         profileImg.style.animation = 'none';
       });
 
